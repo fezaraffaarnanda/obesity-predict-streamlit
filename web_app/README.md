@@ -47,22 +47,6 @@ Aplikasi akan otomatis:
 - **API Docs**: http://localhost:8000/docs
 - **API Interactive**: http://localhost:8000/redoc
 
-## 🔧 Manual Setup
-
-### Jalankan Backend Saja
-
-```bash
-python app.py
-# atau
-uvicorn app:app --reload --port 8000
-```
-
-### Jalankan Frontend Saja
-
-```bash
-streamlit run streamlit.py
-```
-
 ## 📊 Fitur Utama
 
 ### 🤖 Backend API (FastAPI)
@@ -130,15 +114,6 @@ Aplikasi meminta 16 parameter input:
 6. **Obesity Type II** - Obesitas tipe 2
 7. **Obesity Type III** - Obesitas tipe 3
 
-### ⚠️ Tingkat Risiko
-
-- **Normal** - Kondisi sehat
-- **Rendah** - Perlu perhatian minimal
-- **Sedang** - Perlu modifikasi gaya hidup
-- **Tinggi** - Perlu intervensi medis
-- **Sangat Tinggi** - Perlu penanganan intensif
-- **Ekstrem** - Perlu intervensi darurat
-
 ## 🔗 API Endpoints
 
 | Method | Endpoint      | Deskripsi         |
@@ -201,33 +176,6 @@ POST /predict
 - **Data Processing**: Pandas, NumPy
 - **Visualization**: Plotly Express & Graph Objects
 
-## 🐛 Troubleshooting
-
-### Port Conflicts
-
-```bash
-# Jika port 8000 atau 8501 sudah digunakan
-netstat -ano | findstr :8000  # Windows
-lsof -i :8000                 # Linux/Mac
-```
-
-### Missing Dependencies
-
-```bash
-pip install --upgrade pip
-pip install -r requirements.txt
-```
-
-### Backend Connection Issues
-
-1. Pastikan backend berjalan di port 8000
-2. Cek firewall settings
-3. Verifikasi tidak ada aplikasi lain menggunakan port tersebut
-
-## ⚠️ Disclaimer
-
-**PENTING**: Aplikasi ini dirancang sebagai alat bantu screening awal dan **TIDAK DAPAT MENGGANTIKAN** diagnosis medis profesional. Selalu konsultasikan hasil dengan tenaga kesehatan yang kompeten.
-
 ## 📞 Help & Support
 
 ### Commands
@@ -236,19 +184,3 @@ pip install -r requirements.txt
 python run_app.py --help     # Bantuan
 python run_app.py --check    # Cek dependencies
 ```
-
-### Common Issues
-
-- **"Model not loaded"**: Normal untuk demo (menggunakan mock prediction)
-- **"Connection refused"**: Backend belum siap, tunggu beberapa detik
-- **"Import errors"**: Install ulang dependencies
-
-## 📄 License
-
-MIT License - Free for educational and research purposes.
-
----
-
-**Developed with ❤️ for Healthcare Innovation**
-
-🏥 Sistem Prediksi Obesitas v1.0.0
