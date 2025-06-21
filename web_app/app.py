@@ -9,10 +9,10 @@ import os
 from typing import Dict, Any, List
 import uvicorn
 
-# Global variables to store model and preprocessing components
+# Global variabel untuk menyimpan model dan komponen preprocessing yang akan digunakan di seluruh aplikasi
 model_pipeline = None
 
-# Lifespan event handler (menggantikan @app.on_event yang deprecated)
+# Lifespan event handler (menggantikan @app.on_event yang sudah tidak digunakan)
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Startup
@@ -25,7 +25,7 @@ async def lifespan(app: FastAPI):
     # Shutdown
     print("🛑 Shutting down application...")
 
-# Initialize FastAPI app dengan lifespan
+# Inisialisasi FastAPI app dengan lifespan
 app = FastAPI(
     title="Obesity Classification API",
     description="API untuk klasifikasi tingkat obesitas berdasarkan gaya hidup dan kebiasaan",
@@ -47,7 +47,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Pydantic models for request/response
+# Pydantic models untuk request dan response
 class PredictionInput(BaseModel):
     Gender: str
     Age: float
@@ -69,10 +69,6 @@ class PredictionInput(BaseModel):
 class PredictionResponse(BaseModel):
     prediction: str
     probability: Dict[str, float]
-    risk_level: str
-    recommendations: List[str]
-    bmi: float
-    bmi_category: str
 
 class ModelInfo(BaseModel):
     model_name: str
@@ -82,10 +78,10 @@ class ModelInfo(BaseModel):
     classes: List[str]
 
 def load_model():
-    """Load the trained model pipeline"""
+    """Memuat pipeline model yang telah dilatih"""
     global model_pipeline
     try:
-        # Try different model file names
+        # Coba nama file model yang berbeda
         model_files = [
             "../pkl/best_obesity_classifier_xgboost.pkl",
         ]
@@ -97,21 +93,21 @@ def load_model():
                 print(f"✅ Model loaded successfully from {model_file}")
                 return True
         
-        # If no model found, create a mock pipeline for demo
-        print("⚠️ No model file found. Creating mock pipeline for demo...")
+        # Jika tidak ada model yang ditemukan, buat pipeline mock untuk demo
+        print("Tidak ada model file yang ditemukan. Membuat pipeline mock untuk demo...")
         create_mock_pipeline()
         return True
         
     except Exception as e:
-        print(f"❌ Error loading model: {e}")
+        print(f"❌ Error memuat model: {e}")
         create_mock_pipeline()
         return True
 
 def create_mock_pipeline():
-    """Create a mock pipeline for demo purposes"""
+    """Membuat pipeline mock untuk tujuan demo"""
     global model_pipeline
     
-    # Mock model pipeline structure
+    # Struktur pipeline model mock
     model_pipeline = {
         'model_name': 'XGBoost',
         'binary_features': ['Gender', 'family_history_with_overweight', 'FAVC', 'SMOKE', 'SCC'],
@@ -133,10 +129,10 @@ def create_mock_pipeline():
             'cv_mean': 0.946
         }
     }
-    print("✅ Mock pipeline created for demo")
+    print("✅ Pipeline mock berhasil dibuat untuk demo")
 
 def mock_prediction(input_data: dict):
-    """Create mock prediction based on BMI"""
+    """Membuat prediksi mock berdasarkan BMI"""
     bmi = input_data['Weight'] / (input_data['Height'] ** 2)
     
     if bmi < 18.5:
@@ -155,7 +151,7 @@ def mock_prediction(input_data: dict):
         prediction = 'Obesity_Type_III'
         main_prob = 0.91
     
-    # Create probability distribution
+    # Membuat distribusi probabilitas
     probabilities = {}
     remaining_prob = (1 - main_prob) / (len(model_pipeline['class_names']) - 1)
     
@@ -168,17 +164,17 @@ def mock_prediction(input_data: dict):
     return prediction, probabilities
 
 def preprocess_input(input_data: PredictionInput) -> pd.DataFrame:
-    """Preprocess input data to match model requirements"""
+    """Preprocessing input data untuk memenuhi persyaratan model"""
     if model_pipeline is None:
         raise HTTPException(status_code=503, detail="Model not loaded")
     
-    # Convert input to dictionary
+    # Mengubah input menjadi dictionary
     data_dict = input_data.dict()
     
-    # Create DataFrame
+    # Membuat DataFrame
     df = pd.DataFrame([data_dict])
     
-    # Handle binary encoding (simple mapping for mock)
+    # Menangani encoding biner (penggantian sederhana untuk mock)
     binary_mapping = {
         'Gender': {'Male': 1, 'Female': 0},
         'family_history_with_overweight': {'yes': 1, 'no': 0},
@@ -191,106 +187,28 @@ def preprocess_input(input_data: PredictionInput) -> pd.DataFrame:
         if feature in df.columns:
             df[feature] = df[feature].map(mapping).fillna(0)
     
-    # Handle multi-class encoding (one-hot)
+    # Menangani encoding multi-kelas (one-hot)
     multi_features = ['CAEC', 'CALC', 'MTRANS']
     for feature in multi_features:
         if feature in df.columns:
-            # Create dummy variables
+            # Buat variabel dummy
             dummies = pd.get_dummies(df[feature], prefix=feature)
             df = pd.concat([df, dummies], axis=1)
             df = df.drop(columns=[feature])
     
-    # Ensure all required features are present
+    # Pastikan semua fitur yang diperlukan ada
     required_features = model_pipeline['feature_columns']
     for feature in required_features:
         if feature not in df.columns:
             df[feature] = 0
     
-    # Select only required features in correct order
+    # Pilih hanya fitur yang diperlukan dalam urutan yang benar
     df = df[required_features]
     
-    return df
-
-def calculate_bmi(weight: float, height: float) -> tuple:
-    """Calculate BMI and category"""
-    bmi = weight / (height ** 2)
-    
-    if bmi < 18.5:
-        category = "Underweight"
-    elif bmi < 25:
-        category = "Normal"
-    elif bmi < 30:
-        category = "Overweight"
-    else:
-        category = "Obese"
-    
-    return round(bmi, 2), category
-
-def get_risk_level(prediction: str) -> str:
-    """Determine risk level based on prediction"""
-    risk_mapping = {
-        "Insufficient_Weight": "Rendah",
-        "Normal_Weight": "Normal",
-        "Overweight_Level_I": "Sedang",
-        "Overweight_Level_II": "Tinggi",
-        "Obesity_Type_I": "Tinggi",
-        "Obesity_Type_II": "Sangat Tinggi",
-        "Obesity_Type_III": "Ekstrem"
-    }
-    return risk_mapping.get(prediction, "Sedang")
-
-def get_recommendations(prediction: str) -> List[str]:
-    """Get health recommendations based on prediction"""
-    recommendations_mapping = {
-        "Insufficient_Weight": [
-            "Konsultasi dengan ahli gizi untuk program penambahan berat badan sehat",
-            "Tingkatkan asupan kalori dengan makanan bergizi tinggi",
-            "Olahraga ringan untuk membangun massa otot",
-            "Pemeriksaan kesehatan untuk menyingkirkan kondisi medis"
-        ],
-        "Normal_Weight": [
-            "Pertahankan pola makan seimbang dengan gizi yang cukup",
-            "Lakukan aktivitas fisik teratur minimal 150 menit per minggu",
-            "Jaga hidrasi dengan minum air 8 gelas per hari",
-            "Monitoring berat badan secara berkala"
-        ],
-        "Overweight_Level_I": [
-            "Kurangi asupan kalori harian sebesar 300-500 kalori",
-            "Tingkatkan aktivitas fisik menjadi 300 menit per minggu",
-            "Fokus pada makanan whole foods dan kurangi processed food",
-            "Konsultasi dengan ahli gizi untuk rencana diet yang tepat"
-        ],
-        "Overweight_Level_II": [
-            "Program penurunan berat badan terstruktur dengan target 5-10% dari berat badan",
-            "Kombinasi diet rendah kalori dengan olahraga intensitas sedang",
-            "Monitoring progres mingguan dengan bantuan profesional kesehatan",
-            "Evaluasi faktor risiko kesehatan lainnya"
-        ],
-        "Obesity_Type_I": [
-            "Intervensi gaya hidup intensif dengan dukungan medis",
-            "Target penurunan berat badan 5-10% dalam 6 bulan pertama",
-            "Program olahraga terstruktur dengan supervisi",
-            "Konseling nutrisi dan modifikasi perilaku"
-        ],
-        "Obesity_Type_II": [
-            "Evaluasi medis komprehensif oleh tim multidisiplin",
-            "Pertimbangan terapi farmakologi untuk obesitas",
-            "Program rehabilitasi medis terstruktur",
-            "Monitoring komplikasi kesehatan secara ketat"
-        ],
-        "Obesity_Type_III": [
-            "Intervensi medis darurat dan evaluasi menyeluruh",
-            "Evaluasi kelayakan untuk bedah bariatrik",
-            "Perawatan medis intensif dengan monitoring 24/7",
-            "Tim multidisiplin kesehatan (dokter, ahli gizi, psikolog)"
-        ]
-    }
-    return recommendations_mapping.get(prediction, ["Konsultasi dengan tenaga medis profesional"])
-
 # API Endpoints
 @app.get("/")
 async def root():
-    """Root endpoint"""
+    """Endpoint utama"""
     return {
         "message": "Obesity Classification API",
         "version": "1.0.0",
@@ -307,7 +225,7 @@ async def root():
 
 @app.get("/health")
 async def health_check():
-    """Health check endpoint"""
+    """Endpoint untuk pemeriksaan kesehatan"""
     return {
         "status": "healthy",
         "model_loaded": model_pipeline is not None,
@@ -321,7 +239,7 @@ async def ping():
 
 @app.get("/model-info", response_model=ModelInfo)
 async def get_model_info():
-    """Get information about the loaded model"""
+    """Dapatkan informasi tentang model yang dimuat"""
     if model_pipeline is None:
         raise HTTPException(status_code=503, detail="Model not loaded")
     
@@ -335,28 +253,24 @@ async def get_model_info():
 
 @app.post("/predict", response_model=PredictionResponse)
 async def predict_obesity(input_data: PredictionInput):
-    """Predict obesity level based on input features"""
+    """
+    Prediksi tingkat obesitas berdasarkan input fitur
+    
+    Mengembalikan respons yang disederhanakan dengan hanya:
+    - prediction: Kategori obesitas utama
+    - probability: Distribusi probabilitas untuk semua kelas
+    
+    """
     if model_pipeline is None:
         raise HTTPException(status_code=503, detail="Model not loaded")
     
     try:
-        # Calculate BMI
-        bmi, bmi_category = calculate_bmi(input_data.Weight, input_data.Height)
-        
         # Make prediction (using mock for demo)
         prediction, probability_dict = mock_prediction(input_data.dict())
         
-        # Get risk level and recommendations
-        risk_level = get_risk_level(prediction)
-        recommendations = get_recommendations(prediction)
-        
         return PredictionResponse(
             prediction=prediction,
-            probability=probability_dict,
-            risk_level=risk_level,
-            recommendations=recommendations,
-            bmi=bmi,
-            bmi_category=bmi_category
+            probability=probability_dict
         )
         
     except Exception as e:
@@ -364,7 +278,7 @@ async def predict_obesity(input_data: PredictionInput):
 
 @app.get("/features")
 async def get_feature_info():
-    """Get information about input features"""
+    """Dapatkan informasi tentang fitur input"""
     return {
         "features": {
             "Gender": {
@@ -463,7 +377,7 @@ if __name__ == "__main__":
     import os
     print("🚀 Starting Obesity Classification API...")
     
-    # Get port from environment variable (Render sets this automatically)
+    # Dapatkan port dari variabel lingkungan (Render menyetel ini secara otomatis)
     port = int(os.environ.get("PORT", 8000))
     host = "0.0.0.0"
     

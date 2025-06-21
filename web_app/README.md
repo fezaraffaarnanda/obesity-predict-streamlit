@@ -156,15 +156,12 @@ POST /predict
   "probability": {
     "Normal_Weight": 0.85,
     "Overweight_Level_I": 0.1,
-    "Insufficient_Weight": 0.05
-  },
-  "risk_level": "Normal",
-  "recommendations": [
-    "Pertahankan pola makan sehat",
-    "Rutin berolahraga minimal 150 menit per minggu"
-  ],
-  "bmi": 22.86,
-  "bmi_category": "Normal"
+    "Insufficient_Weight": 0.05,
+    "Obesity_Type_I": 0.0,
+    "Overweight_Level_II": 0.0,
+    "Obesity_Type_II": 0.0,
+    "Obesity_Type_III": 0.0
+  }
 }
 ```
 

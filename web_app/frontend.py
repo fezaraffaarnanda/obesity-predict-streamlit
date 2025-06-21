@@ -96,7 +96,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 def check_backend_connection():
-    """Check if backend is accessible"""
+    """Memeriksa apakah backend dapat diakses"""
     try:
         response = requests.get(f"{BACKEND_URL}/health", timeout=5)
         return response.status_code == 200
@@ -104,7 +104,7 @@ def check_backend_connection():
         return False
 
 def get_model_info():
-    """Get model information from backend"""
+    """Mendapatkan informasi model dari backend"""
     try:
         response = requests.get(f"{BACKEND_URL}/model-info", timeout=10)
         if response.status_code == 200:
@@ -114,7 +114,7 @@ def get_model_info():
         return None
 
 def get_feature_info():
-    """Get feature information from backend"""
+    """Mendapatkan informasi fitur dari backend"""
     try:
         response = requests.get(f"{BACKEND_URL}/features", timeout=10)
         if response.status_code == 200:
@@ -124,7 +124,7 @@ def get_feature_info():
         return None
 
 def make_prediction(input_data):
-    """Make prediction using backend API"""
+    """Membuat prediksi menggunakan API backend"""
     try:
         response = requests.post(f"{BACKEND_URL}/predict", json=input_data, timeout=30)
         if response.status_code == 200:
@@ -188,7 +188,7 @@ def main():
         display_analysis_page()
 
 def display_home_page():
-    """Display home page"""
+    """Menampilkan halaman beranda"""
     st.markdown('<h2 class="sub-header">🏠 Selamat Datang</h2>', unsafe_allow_html=True)
     
     # Hero section
@@ -249,7 +249,7 @@ def display_home_page():
             st.write(desc)
 
 def display_prediction_page():
-    """Display prediction page with input and results combined"""
+    """Menampilkan halaman prediksi dengan input dan hasil yang digabungkan"""
     st.markdown('<h2 class="sub-header">🔮 Prediksi Tingkat Obesitas</h2>', unsafe_allow_html=True)
     
     # Get feature information
@@ -381,10 +381,10 @@ def display_prediction_page():
             if "error" in result:
                 st.error(f"❌ Error: {result['error']}")
             else:
-                # Display simple result
+                # Display simplified result
                 st.success("✅ Analisis berhasil!")
                 
-                # Display only the main prediction result
+                # Display main prediction result
                 prediction_clean = result['prediction'].replace('_', ' ').title()
                 
                 st.markdown(f"""
@@ -396,9 +396,11 @@ def display_prediction_page():
                     </h1>
                 </div>
                 """, unsafe_allow_html=True)
+                
+                
 
 def display_model_info_page():
-    """Display model information page"""
+    """Menampilkan halaman informasi model"""
     st.markdown('<h2 class="sub-header">📊 Informasi Model</h2>', unsafe_allow_html=True)
     
     model_info = get_model_info()
@@ -406,7 +408,7 @@ def display_model_info_page():
         st.error("❌ Tidak dapat memuat informasi model")
         return
     
-    # Model overview
+    # Gambaran model
     col1, col2 = st.columns([2, 1])
     
     with col1:
@@ -425,10 +427,10 @@ def display_model_info_page():
             clean_name = class_name.replace('_', ' ').title()
             st.write(f"{i}. {clean_name}")
     
-    # Performance visualization
+    # Visualisasi performa model
     st.markdown("### 📈 Performa Model")
     
-    # Create performance metrics chart
+    # Membuat chart metrik performa model
     performance_data = {
         'Metric': ['Accuracy', 'Precision', 'Recall', 'F1-Score'],
         'Score': [model_info['accuracy'], 0.951, 0.949, 0.950]
@@ -464,7 +466,7 @@ def display_model_info_page():
         })
 
 def display_analysis_page():
-    """Display analysis and insights page"""
+    """Menampilkan halaman analisis dan insight"""
     st.markdown('<h2 class="sub-header">📈 Analisis & Insight</h2>', unsafe_allow_html=True)
     
     # Feature importance (mock data for demo)
@@ -480,7 +482,7 @@ def display_analysis_page():
         'NCP': 0.091
     }
     
-    # Create feature importance chart
+    # Membuat chart feature importance
     importance_df = pd.DataFrame(list(feature_importance.items()), 
                                 columns=['Fitur', 'Importance'])
     importance_df = importance_df.sort_values('Importance', ascending=True)
@@ -494,7 +496,7 @@ def display_analysis_page():
     fig.update_layout(title_x=0.5, height=400)
     st.plotly_chart(fig, use_container_width=True)
     
-    # Health insights
+    # Insight kesehatan
     st.markdown("### 💡 Insight Kesehatan")
     
     col1, col2 = st.columns(2)
