@@ -87,7 +87,7 @@ def load_model():
     try:
         # Try different model file names
         model_files = [
-            "best_obesity_classifier_xgboost.pkl",
+            "../pkl/best_obesity_classifier_xgboost.pkl",
         ]
         
         for model_file in model_files:
