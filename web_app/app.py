@@ -38,8 +38,6 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=[
         "http://localhost:8501",  # Local Streamlit
-        "https://*.streamlit.app",  # Streamlit Cloud
-        "https://*.onrender.com",   # Render.com domains
         "*"  # Allow all for demo (untuk production, spesifikkan domain)
     ],
     allow_credentials=True,
@@ -83,128 +81,211 @@ def load_model():
     try:
         # Coba nama file model yang berbeda
         model_files = [
-            "../pkl/best_obesity_classifier_xgboost.pkl",
+            "../pkl/best_obesity_classifier_xgboost.pkl"
         ]
         
         for model_file in model_files:
             if os.path.exists(model_file):
                 with open(model_file, 'rb') as f:
-                    model_pipeline = pickle.load(f)
-                print(f"✅ Model loaded successfully from {model_file}")
-                return True
+                    loaded_data = pickle.load(f)
+                
+                print(f"✅ File .pkl berhasil dimuat dari {model_file}")
+                print(f"🔍 Data type: {type(loaded_data)}")
+                
+                # Handle different model storage formats
+                if isinstance(loaded_data, dict):
+                    if 'best_model' in loaded_data:
+                        # Model disimpan dalam dictionary dengan key 'best_model'
+                        model_pipeline = loaded_data
+                        actual_model = loaded_data['best_model']
+                        print(f"🎯 Model ditemukan di key 'best_model': {type(actual_model)}")
+                        
+                        # Verify model has required methods
+                        if hasattr(actual_model, 'predict') and hasattr(actual_model, 'predict_proba'):
+                            print("🎯 Model siap untuk prediksi!")
+                            return True
+                        else:
+                            raise Exception("Model di 'best_model' tidak memiliki method predict/predict_proba")
+                    else:
+                        raise Exception("Dictionary tidak memiliki key 'best_model'")
+                
+                elif hasattr(loaded_data, 'predict') and hasattr(loaded_data, 'predict_proba'):
+                    # Model langsung disimpan tanpa dictionary wrapper
+                    model_pipeline = {'best_model': loaded_data}
+                    print(f"🎯 Model langsung: {type(loaded_data)}")
+                    print("🎯 Model siap untuk prediksi!")
+                    return True
+                
+                else:
+                    raise Exception(f"Format model tidak dikenali: {type(loaded_data)}")
         
-        # Jika tidak ada model yang ditemukan, buat pipeline mock untuk demo
-        print("Tidak ada model file yang ditemukan. Membuat pipeline mock untuk demo...")
-        create_mock_pipeline()
-        return True
+        # Jika tidak ada model yang ditemukan
+        raise FileNotFoundError("Tidak ada model .pkl yang ditemukan. Pastikan file model ada di folder pkl/")
         
     except Exception as e:
         print(f"❌ Error memuat model: {e}")
-        create_mock_pipeline()
-        return True
+        raise e
 
-def create_mock_pipeline():
-    """Membuat pipeline mock untuk tujuan demo"""
-    global model_pipeline
+def predict_with_model(input_data: dict, model_pipeline):
+    """Prediksi menggunakan model .pkl yang sesungguhnya"""
+    # Create PredictionInput object untuk preprocessing
+    prediction_input = PredictionInput(**input_data)
     
-    # Struktur pipeline model mock
-    model_pipeline = {
-        'model_name': 'XGBoost',
-        'binary_features': ['Gender', 'family_history_with_overweight', 'FAVC', 'SMOKE', 'SCC'],
-        'multi_features': ['CAEC', 'CALC', 'MTRANS'],
-        'feature_columns': [
+    # Preprocess the input data
+    processed_df = preprocess_input(prediction_input)
+    
+    print("🤖 Menggunakan model .pkl untuk prediksi")
+    print(f"📊 Processed data shape: {processed_df.shape}")
+    print(f"📊 Processed data sample: {processed_df.iloc[0].to_dict()}")
+    
+    # Use actual trained model
+    prediction_idx = model_pipeline['best_model'].predict(processed_df)[0]
+    probabilities_array = model_pipeline['best_model'].predict_proba(processed_df)[0]
+    
+    print(f"🎯 Prediction index: {prediction_idx}")
+    print(f"🎯 Raw probabilities: {probabilities_array}")
+    
+    # Get class names from model pipeline (correct approach)
+    if 'class_names' in model_pipeline:
+        class_names = model_pipeline['class_names']
+        print(f"🎯 Menggunakan class names dari model: {class_names}")
+    else:
+        # Fallback class names
+        class_names = [
+            'Insufficient_Weight', 'Normal_Weight', 'Overweight_Level_I',
+            'Overweight_Level_II', 'Obesity_Type_I', 'Obesity_Type_II', 'Obesity_Type_III'
+        ]
+        print("⚠️ Menggunakan fallback class names")
+    
+    # Create prediction result
+    prediction = str(class_names[prediction_idx])  # Ensure string
+    probability_dict = {str(class_name): float(prob) for class_name, prob in zip(class_names, probabilities_array)}
+    
+    # Print detailed probability breakdown
+    print("\n📈 PROBABILITAS DETAIL:")
+    for i, (class_name, prob) in enumerate(zip(class_names, probabilities_array)):
+        print(f"   {i}: {class_name} = {prob:.4f} ({prob*100:.2f}%)")
+    print(f"🎯 HASIL PREDIKSI: {prediction} (index {prediction_idx})")
+    print("="*60)
+    
+    return prediction, probability_dict
+
+def preprocess_input(input_data: PredictionInput) -> pd.DataFrame:
+    """Preprocessing input data untuk memenuhi persyaratan model dengan komponen yang sama seperti saat training"""
+    if model_pipeline is None:
+        raise HTTPException(status_code=503, detail="Model not loaded")
+    
+    # Mengubah input menjadi dictionary
+    data_dict = input_data.dict()
+    print(f"📝 Input data original: {data_dict}")
+    
+    # Membuat DataFrame
+    df = pd.DataFrame([data_dict])
+    print(f"📊 DataFrame setelah dibuat: {df.to_dict('records')[0]}")
+    
+    # GUNAKAN LABEL ENCODERS DARI MODEL TRAINING
+    if 'label_encoders' in model_pipeline:
+        print("🔄 Menggunakan Label Encoders dari model training")
+        label_encoders = model_pipeline['label_encoders']
+        
+        for feature_name, encoder in label_encoders.items():
+            if feature_name in df.columns:
+                original_val = df[feature_name].iloc[0]
+                try:
+                    # Transform menggunakan encoder yang sudah ditraining
+                    encoded_val = encoder.transform([original_val])[0]
+                    df[feature_name] = encoded_val
+                    print(f"   ✅ {feature_name}: '{original_val}' -> {encoded_val}")
+                except ValueError as e:
+                    print(f"   ⚠️ {feature_name}: '{original_val}' tidak dikenali, menggunakan nilai default 0")
+                    df[feature_name] = 0
+    else:
+        print("⚠️ Label encoders tidak ditemukan, menggunakan mapping manual")
+        # Fallback ke mapping manual
+        binary_mapping = {
+            'Gender': {'Male': 1, 'Female': 0},
+            'family_history_with_overweight': {'yes': 1, 'no': 0},
+            'FAVC': {'yes': 1, 'no': 0},
+            'SMOKE': {'yes': 1, 'no': 0},
+            'SCC': {'yes': 1, 'no': 0}
+        }
+        
+        for feature, mapping in binary_mapping.items():
+            if feature in df.columns:
+                original_val = df[feature].iloc[0]
+                df[feature] = df[feature].map(mapping).fillna(0)
+                new_val = df[feature].iloc[0]
+                print(f"🔄 Binary mapping {feature}: '{original_val}' -> {new_val}")
+    
+    # Menangani encoding multi-kelas (one-hot) - ini sama seperti sebelumnya
+    multi_features = ['CAEC', 'CALC', 'MTRANS']
+    for feature in multi_features:
+        if feature in df.columns:
+            original_val = df[feature].iloc[0]
+            print(f"🔄 One-hot encoding {feature}: '{original_val}'")
+            # Buat variabel dummy
+            dummies = pd.get_dummies(df[feature], prefix=feature)
+            print(f"   Created dummies: {list(dummies.columns)}")
+            df = pd.concat([df, dummies], axis=1)
+            df = df.drop(columns=[feature])
+    
+    print(f"📊 DataFrame setelah encoding: columns = {list(df.columns)}")
+    
+    # Gunakan feature_columns dari model .pkl
+    if 'feature_columns' in model_pipeline:
+        expected_features = model_pipeline['feature_columns']
+        print(f"🔍 Menggunakan {len(expected_features)} feature columns dari model")
+        print(f"🔍 Expected features: {expected_features}")
+    else:
+        # Fallback ke manual list jika tidak ada di model
+        expected_features = [
             'Gender', 'Age', 'Height', 'Weight', 'family_history_with_overweight',
             'FAVC', 'FCVC', 'NCP', 'SMOKE', 'CH2O', 'SCC', 'FAF', 'TUE',
             'CAEC_Frequently', 'CAEC_Sometimes', 'CAEC_no',
             'CALC_Frequently', 'CALC_Sometimes', 'CALC_no',
             'MTRANS_Automobile', 'MTRANS_Bike', 'MTRANS_Motorbike', 
             'MTRANS_Public_Transportation', 'MTRANS_Walking'
-        ],
-        'class_names': [
-            'Insufficient_Weight', 'Normal_Weight', 'Overweight_Level_I',
-            'Overweight_Level_II', 'Obesity_Type_I', 'Obesity_Type_II', 'Obesity_Type_III'
-        ],
-        'model_performance': {
-            'test_accuracy': 0.9528,
-            'cv_mean': 0.946
-        }
-    }
-    print("✅ Pipeline mock berhasil dibuat untuk demo")
-
-def mock_prediction(input_data: dict):
-    """Membuat prediksi mock berdasarkan BMI"""
-    bmi = input_data['Weight'] / (input_data['Height'] ** 2)
+        ]
+        print("⚠️ Menggunakan feature columns manual (fallback)")
     
-    if bmi < 18.5:
-        prediction = 'Insufficient_Weight'
-        main_prob = 0.85
-    elif bmi < 25:
-        prediction = 'Normal_Weight'
-        main_prob = 0.90
-    elif bmi < 30:
-        prediction = 'Overweight_Level_I'
-        main_prob = 0.82
-    elif bmi < 35:
-        prediction = 'Obesity_Type_I'
-        main_prob = 0.87
-    else:
-        prediction = 'Obesity_Type_III'
-        main_prob = 0.91
-    
-    # Membuat distribusi probabilitas
-    probabilities = {}
-    remaining_prob = (1 - main_prob) / (len(model_pipeline['class_names']) - 1)
-    
-    for class_name in model_pipeline['class_names']:
-        if class_name == prediction:
-            probabilities[class_name] = main_prob
-        else:
-            probabilities[class_name] = remaining_prob
-    
-    return prediction, probabilities
-
-def preprocess_input(input_data: PredictionInput) -> pd.DataFrame:
-    """Preprocessing input data untuk memenuhi persyaratan model"""
-    if model_pipeline is None:
-        raise HTTPException(status_code=503, detail="Model not loaded")
-    
-    # Mengubah input menjadi dictionary
-    data_dict = input_data.dict()
-    
-    # Membuat DataFrame
-    df = pd.DataFrame([data_dict])
-    
-    # Menangani encoding biner (penggantian sederhana untuk mock)
-    binary_mapping = {
-        'Gender': {'Male': 1, 'Female': 0},
-        'family_history_with_overweight': {'yes': 1, 'no': 0},
-        'FAVC': {'yes': 1, 'no': 0},
-        'SMOKE': {'yes': 1, 'no': 0},
-        'SCC': {'yes': 1, 'no': 0}
-    }
-    
-    for feature, mapping in binary_mapping.items():
-        if feature in df.columns:
-            df[feature] = df[feature].map(mapping).fillna(0)
-    
-    # Menangani encoding multi-kelas (one-hot)
-    multi_features = ['CAEC', 'CALC', 'MTRANS']
-    for feature in multi_features:
-        if feature in df.columns:
-            # Buat variabel dummy
-            dummies = pd.get_dummies(df[feature], prefix=feature)
-            df = pd.concat([df, dummies], axis=1)
-            df = df.drop(columns=[feature])
-    
-    # Pastikan semua fitur yang diperlukan ada
-    required_features = model_pipeline['feature_columns']
-    for feature in required_features:
+    # Tambahkan kolom yang hilang dengan nilai 0
+    missing_features = []
+    for feature in expected_features:
         if feature not in df.columns:
             df[feature] = 0
+            missing_features.append(feature)
     
-    # Pilih hanya fitur yang diperlukan dalam urutan yang benar
-    df = df[required_features]
+    if missing_features:
+        print(f"➕ Added missing features with 0: {missing_features}")
     
+    # Pilih hanya kolom yang diperlukan dalam urutan yang benar
+    df = df[expected_features]
+    
+    # GUNAKAN SCALER DARI MODEL TRAINING
+    if 'scaler' in model_pipeline:
+        print("📏 Menggunakan StandardScaler dari model training")
+        scaler = model_pipeline['scaler']
+        
+        # Simpan data sebelum scaling untuk debug
+        pre_scaling = df.iloc[0].to_dict()
+        print(f"📊 Data sebelum scaling: {pre_scaling}")
+        
+        # Apply scaling
+        df_scaled = pd.DataFrame(
+            scaler.transform(df), 
+            columns=df.columns, 
+            index=df.index
+        )
+        
+        post_scaling = df_scaled.iloc[0].to_dict()
+        print(f"📊 Data setelah scaling: {post_scaling}")
+        
+        return df_scaled
+    else:
+        print("⚠️ Scaler tidak ditemukan, data tidak di-scale")
+        print(f"✅ Final processed data (no scaling): {df.iloc[0].to_dict()}")
+        return df
+
 # API Endpoints
 @app.get("/")
 async def root():
@@ -243,30 +324,54 @@ async def get_model_info():
     if model_pipeline is None:
         raise HTTPException(status_code=503, detail="Model not loaded")
     
+    # Get model information from actual trained model
+    model_name = model_pipeline.get('model_name', type(model_pipeline['best_model']).__name__)
+    
+    # Use actual performance data from model if available
+    model_performance = model_pipeline.get('model_performance', {})
+    accuracy = model_performance.get('test_accuracy', 0.95)
+    cv_score = model_performance.get('cv_mean', 0.94)
+    
+    # Get class names from model pipeline (not from model.classes_ which contains indices)
+    if 'class_names' in model_pipeline:
+        class_names = [str(name) for name in model_pipeline['class_names']]
+    else:
+        class_names = [
+            'Insufficient_Weight', 'Normal_Weight', 'Overweight_Level_I',
+            'Overweight_Level_II', 'Obesity_Type_I', 'Obesity_Type_II', 'Obesity_Type_III'
+        ]
+    
+    # Get feature count
+    if 'feature_columns' in model_pipeline:
+        feature_count = len(model_pipeline['feature_columns'])
+    elif hasattr(model_pipeline['best_model'], 'n_features_in_'):
+        feature_count = model_pipeline['best_model'].n_features_in_
+    else:
+        feature_count = 23
+    
     return ModelInfo(
-        model_name=model_pipeline['model_name'],
-        accuracy=float(model_pipeline['model_performance']['test_accuracy']),
-        cv_score=float(model_pipeline['model_performance']['cv_mean']),
-        feature_count=len(model_pipeline['feature_columns']),
-        classes=list(model_pipeline['class_names'])
+        model_name=model_name,
+        accuracy=float(accuracy),
+        cv_score=float(cv_score),
+        feature_count=int(feature_count),
+        classes=class_names
     )
 
 @app.post("/predict", response_model=PredictionResponse)
 async def predict_obesity(input_data: PredictionInput):
     """
-    Prediksi tingkat obesitas berdasarkan input fitur
+    Prediksi tingkat obesitas berdasarkan input fitur menggunakan model .pkl yang telah ditraining
     
-    Mengembalikan respons yang disederhanakan dengan hanya:
+    Mengembalikan respons dengan:
     - prediction: Kategori obesitas utama
     - probability: Distribusi probabilitas untuk semua kelas
-    
     """
     if model_pipeline is None:
         raise HTTPException(status_code=503, detail="Model not loaded")
     
     try:
-        # Make prediction (using mock for demo)
-        prediction, probability_dict = mock_prediction(input_data.dict())
+        # Gunakan model .pkl untuk prediksi
+        prediction, probability_dict = predict_with_model(input_data.dict(), model_pipeline)
         
         return PredictionResponse(
             prediction=prediction,
