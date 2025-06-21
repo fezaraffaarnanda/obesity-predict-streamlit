@@ -1,3 +1,4 @@
+from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
@@ -8,24 +9,43 @@ import os
 from typing import Dict, Any, List
 import uvicorn
 
-# Initialize FastAPI app
+# Global variables to store model and preprocessing components
+model_pipeline = None
+
+# Lifespan event handler (menggantikan @app.on_event yang deprecated)
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Startup
+    global model_pipeline
+    print("🚀 Starting up application...")
+    success = load_model()
+    if not success:
+        print("⚠️ Warning: Model not loaded. Using mock predictions.")
+    yield
+    # Shutdown
+    print("🛑 Shutting down application...")
+
+# Initialize FastAPI app dengan lifespan
 app = FastAPI(
     title="Obesity Classification API",
     description="API untuk klasifikasi tingkat obesitas berdasarkan gaya hidup dan kebiasaan",
-    version="1.0.0"
+    version="1.0.0",
+    lifespan=lifespan
 )
 
 # CORS middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=[
+        "http://localhost:8501",  # Local Streamlit
+        "https://*.streamlit.app",  # Streamlit Cloud
+        "https://*.onrender.com",   # Render.com domains
+        "*"  # Allow all for demo (untuk production, spesifikkan domain)
+    ],
     allow_credentials=True,
-    allow_methods=["*"],
+    allow_methods=["GET", "POST"],
     allow_headers=["*"],
 )
-
-# Global variables to store model and preprocessing components
-model_pipeline = None
 
 # Pydantic models for request/response
 class PredictionInput(BaseModel):
@@ -213,44 +233,44 @@ def get_risk_level(prediction: str) -> str:
         "Normal_Weight": "Normal",
         "Overweight_Level_I": "Sedang",
         "Overweight_Level_II": "Tinggi",
-        "Obesity_Type_I": "Sangat Tinggi",
+        "Obesity_Type_I": "Tinggi",
         "Obesity_Type_II": "Sangat Tinggi",
         "Obesity_Type_III": "Ekstrem"
     }
-    return risk_mapping.get(prediction, "Unknown")
+    return risk_mapping.get(prediction, "Sedang")
 
 def get_recommendations(prediction: str) -> List[str]:
-    """Get recommendations based on prediction"""
+    """Get health recommendations based on prediction"""
     recommendations_mapping = {
         "Insufficient_Weight": [
-            "Tingkatkan asupan kalori harian secara sehat",
-            "Konsumsi makanan bergizi tinggi seperti kacang-kacangan dan alpukat",
-            "Konsultasi dengan ahli gizi untuk program penambahan berat badan",
-            "Latihan kekuatan untuk menambah massa otot"
+            "Konsultasi dengan ahli gizi untuk program penambahan berat badan sehat",
+            "Tingkatkan asupan kalori dengan makanan bergizi tinggi",
+            "Olahraga ringan untuk membangun massa otot",
+            "Pemeriksaan kesehatan untuk menyingkirkan kondisi medis"
         ],
         "Normal_Weight": [
-            "Pertahankan pola makan sehat dan seimbang",
-            "Rutin berolahraga minimal 150 menit per minggu",
-            "Jaga keseimbangan asupan nutrisi makro dan mikro",
-            "Monitor berat badan secara berkala"
+            "Pertahankan pola makan seimbang dengan gizi yang cukup",
+            "Lakukan aktivitas fisik teratur minimal 150 menit per minggu",
+            "Jaga hidrasi dengan minum air 8 gelas per hari",
+            "Monitoring berat badan secara berkala"
         ],
         "Overweight_Level_I": [
-            "Kurangi asupan kalori 300-500 kalori per hari",
-            "Tingkatkan aktivitas fisik menjadi 200-300 menit per minggu",
-            "Batasi makanan olahan, gula, dan lemak jenuh",
-            "Konsultasi dengan dokter atau ahli gizi"
+            "Kurangi asupan kalori harian sebesar 300-500 kalori",
+            "Tingkatkan aktivitas fisik menjadi 300 menit per minggu",
+            "Fokus pada makanan whole foods dan kurangi processed food",
+            "Konsultasi dengan ahli gizi untuk rencana diet yang tepat"
         ],
         "Overweight_Level_II": [
-            "Program penurunan berat badan terkontrol dengan target 0.5-1 kg per minggu",
-            "Konsultasi medis untuk evaluasi komprehensif",
-            "Diet rendah kalori dengan supervisi profesional",
-            "Aktivitas fisik teratur dan terstruktur"
+            "Program penurunan berat badan terstruktur dengan target 5-10% dari berat badan",
+            "Kombinasi diet rendah kalori dengan olahraga intensitas sedang",
+            "Monitoring progres mingguan dengan bantuan profesional kesehatan",
+            "Evaluasi faktor risiko kesehatan lainnya"
         ],
         "Obesity_Type_I": [
-            "Intervensi medis diperlukan segera",
-            "Program penurunan berat badan intensif",
-            "Monitoring kesehatan rutin (tekanan darah, gula darah)",
-            "Dukungan psikologis dan konseling gaya hidup"
+            "Intervensi gaya hidup intensif dengan dukungan medis",
+            "Target penurunan berat badan 5-10% dalam 6 bulan pertama",
+            "Program olahraga terstruktur dengan supervisi",
+            "Konseling nutrisi dan modifikasi perilaku"
         ],
         "Obesity_Type_II": [
             "Evaluasi medis komprehensif oleh tim multidisiplin",
@@ -266,14 +286,6 @@ def get_recommendations(prediction: str) -> List[str]:
         ]
     }
     return recommendations_mapping.get(prediction, ["Konsultasi dengan tenaga medis profesional"])
-
-# Startup event
-@app.on_event("startup")
-async def startup_event():
-    """Load model on startup"""
-    success = load_model()
-    if not success:
-        print("⚠️ Warning: Model not loaded. Using mock predictions.")
 
 # API Endpoints
 @app.get("/")
@@ -301,6 +313,11 @@ async def health_check():
         "model_loaded": model_pipeline is not None,
         "timestamp": pd.Timestamp.now().isoformat()
     }
+
+@app.get("/ping")
+async def ping():
+    """Ping endpoint untuk keep-alive"""
+    return {"status": "pong", "timestamp": pd.Timestamp.now().isoformat()}
 
 @app.get("/model-info", response_model=ModelInfo)
 async def get_model_info():
@@ -443,9 +460,18 @@ async def get_feature_info():
     }
 
 if __name__ == "__main__":
+    import os
     print("🚀 Starting Obesity Classification API...")
-    print("📍 Server: http://localhost:8000")
-    print("📚 API Docs: http://localhost:8000/docs")
-    print("🔄 Interactive API: http://localhost:8000/redoc")
     
-    uvicorn.run(app, host="0.0.0.0", port=8000, reload=True) 
+    # Get port from environment variable (Render sets this automatically)
+    port = int(os.environ.get("PORT", 8000))
+    host = "0.0.0.0"
+    
+    print(f"📍 Server: {host}:{port}")
+    print("📚 API Docs: /docs")
+    print("🔄 Interactive API: /redoc")
+    print("🏥 Health Check: /health")
+    print("🔄 Ping: /ping")
+    
+    # Production settings - no reload
+    uvicorn.run(app, host=host, port=port, reload=False) 

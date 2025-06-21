@@ -1,14 +1,13 @@
-# FastAPI Backend
-fastapi
-uvicorn[standard]
-pydantic
+# Production Requirements for Render.com Backend
+fastapi==0.104.1
+uvicorn[standard]==0.24.0
+pydantic==2.5.0
+pandas==2.1.4
+numpy==1.25.2
+python-multipart==0.0.6
 
 # Streamlit Frontend  
 streamlit
-
-# Data Processing
-pandas
-numpy
 
 # Visualization
 plotly
@@ -16,5 +15,5 @@ plotly
 # HTTP Requests
 requests
 
-# Additional FastAPI dependencies
-python-multipart
+# Optional: For better error handling and logging
+python-json-logger==2.0.7
