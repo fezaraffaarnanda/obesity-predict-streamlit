@@ -128,24 +128,24 @@ def load_model():
 
 def predict_with_model(input_data: dict, model_pipeline):
     """Prediksi menggunakan model .pkl yang sesungguhnya"""
-    # Create PredictionInput object untuk preprocessing
+    # Buat PredictionInput object untuk preprocessing
     prediction_input = PredictionInput(**input_data)
     
-    # Preprocess the input data
+    # Preprocess data input
     processed_df = preprocess_input(prediction_input)
     
     print("🤖 Menggunakan model .pkl untuk prediksi")
-    print(f"📊 Processed data shape: {processed_df.shape}")
-    print(f"📊 Processed data sample: {processed_df.iloc[0].to_dict()}")
+    print(f"📊 Data yang diproses shape: {processed_df.shape}")
+    print(f"📊 Data yang diproses sample: {processed_df.iloc[0].to_dict()}")
     
-    # Use actual trained model
+    # Gunakan model yang telah dilatih
     prediction_idx = model_pipeline['best_model'].predict(processed_df)[0]
     probabilities_array = model_pipeline['best_model'].predict_proba(processed_df)[0]
     
-    print(f"🎯 Prediction index: {prediction_idx}")
-    print(f"🎯 Raw probabilities: {probabilities_array}")
+    print(f"🎯 Index prediksi: {prediction_idx}")
+    print(f"🎯 Peluang mentah: {probabilities_array}")
     
-    # Get class names from model pipeline (correct approach)
+    # Nama kelas dari model pipeline (cara yang benar)
     if 'class_names' in model_pipeline:
         class_names = model_pipeline['class_names']
         print(f"🎯 Menggunakan class names dari model: {class_names}")
@@ -157,11 +157,11 @@ def predict_with_model(input_data: dict, model_pipeline):
         ]
         print("⚠️ Menggunakan fallback class names")
     
-    # Create prediction result
+    # Hasil prediksi
     prediction = str(class_names[prediction_idx])  # Ensure string
     probability_dict = {str(class_name): float(prob) for class_name, prob in zip(class_names, probabilities_array)}
     
-    # Print detailed probability breakdown
+    # Print detail peluang
     print("\n📈 PROBABILITAS DETAIL:")
     for i, (class_name, prob) in enumerate(zip(class_names, probabilities_array)):
         print(f"   {i}: {class_name} = {prob:.4f} ({prob*100:.2f}%)")
@@ -484,7 +484,7 @@ if __name__ == "__main__":
     
     # Dapatkan port dari variabel lingkungan (Render menyetel ini secara otomatis)
     port = int(os.environ.get("PORT", 8000))
-    host = "0.0.0.0"
+    host = "localhost"
     
     print(f"📍 Server: {host}:{port}")
     print("📚 API Docs: /docs")
